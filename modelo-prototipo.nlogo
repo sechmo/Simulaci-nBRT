@@ -1,30 +1,43 @@
 extensions [vid] ; Para grabar
+
+
+;-----------------------------------
+; BREED PASAJEROS
+; ----------------------------------
 breed [pasajeros pasajero]
-breed [posibles posible]
-breed [puertas puerta]
 
-directed-link-breed [andando-con-bus-s andando-con-bus]
-
-undirected-link-breed [chasis-buses chasis-bus]
-
+;-----------------------------------
+; BREEDS PARA LOS BUSES
+; ----------------------------------
 breed [buses bus]
 breed [vagones vagon]
 breed [conexiones conexion]
-breed [paradas parada]
+directed-link-breed [andando-con-bus-s andando-con-bus]
+undirected-link-breed [chasis-buses chasis-bus]
 
+;-----------------------------------
+; BREEDS PARA ESTACIONES
+; ---------------------------------
 breed [estaciones estacion]
+breed [paradas parada]
+breed [puertas puerta]
 
+;-----------------------------------
+; MEDIDORES GLOBALES
+; ---------------------------------
 globals [
   tiempo-promedio
 ]
 
-
+;-----------------------------------
+; VARIABLES PATCHES
+; ----------------------------------
 patches-own[
   tipo ; Piso - Pared - Calle
   interesados
 ]
 ;-----------------------------------
-; PASAJEROS
+; VARIBALES PASAJEROS
 ; ----------------------------------
 pasajeros-own[
   ruta ; La ruta de bus que va a tomar (aun no se utiliza)
@@ -34,7 +47,7 @@ pasajeros-own[
 ]
 
 ;----------------------------------
-; BUSES
+; VARIBALES BUSES
 ;----------------------------------
 buses-own [
   ruta
@@ -58,7 +71,9 @@ vagones-own[
 conexiones-own [
   union
 ]
-
+;-----------------------------------
+; VARIABLES PARADAS
+; ----------------------------------
 paradas-own [
   abierta
   ruta
@@ -67,7 +82,7 @@ paradas-own [
   orientacion-p
 ]
 ;-----------------------------------
-; ESTACIONES
+; VARIABLES ESTACIONES
 ; ----------------------------------
 estaciones-own [
   paradas-estacion
@@ -80,25 +95,31 @@ estaciones-own [
 
 to setup
   clear-all
-
+  ; Poner shapes correspondientes
   set-default-shape buses "bus"
   set-default-shape vagones "articulacion"
   set-default-shape conexiones "conexion"
   set-default-shape pasajeros "person"
   set-default-shape puertas "box"
   set-default-shape paradas "parada"
+  ; Colorear pasto
   ask patches [
     set pcolor green + random 2 - 1
     set interesados []
   ]
+  ; Estaciones a 200 de distancia
   crear-estacion patch -100 0
   crear-estacion patch 100 0
+  ; Crear calles
   ask patches with [ abs(pycor) > 5 and abs(pycor) < 19 ] [
     set tipo "calle"
     set pcolor black
   ]
-  crear-bus (patch -250 9) 2 VelocidadBuses 90 sort paradas with [orientacion-parada = 1]
-  crear-bus (patch 250 -9) 2 VelocidadBuses -90 sort paradas with [orientacion-parada = -1]
+  ; Buses para cada estacion
+  crear-bus (patch -150 9) 2 VelocidadBuses 90 sort paradas with [orientacion-parada = 1]
+  crear-bus (patch 150 -9) 2 VelocidadBuses -90 sort paradas with [orientacion-parada = -1]
+
+  ; Pasajeros aleatorios en funcion de densidad
   ask patches with [tipo = "piso"] [
     set interesados []
     if random-float 1.0 < densidad / 100 [
@@ -110,6 +131,7 @@ to setup
       ]
     ]
   ]
+  ; Reset medidores
   set tiempo-promedio (list 0 0)
   reset-ticks
 end
@@ -118,8 +140,18 @@ end
 ; GO
 ;----------------------------------
 to cosas-pasajeros
+  ; Elegir regla aleatoria bajo probabilidad de SeguridadPaso
   ask pasajeros with [decidido = false and count my-links = 0] [
-    (run (one-of (list [p -> regla-1 p] [p -> regla-2 p] [p -> regla-3 p] [p -> regla-4 p] [p -> regla-5 p] [p -> regla-6 p] [p -> regla-7 p] [p -> regla-8 p] [p -> regla-9 p])) (SeguridadPaso / 10))
+    (run (one-of
+      (list [p -> regla-1 p]
+        [p -> regla-2 p]
+        [p -> regla-3 p]
+        [p -> regla-4 p]
+        [p -> regla-5 p]
+        [p -> regla-6 p]
+        [p -> regla-7 p]
+        [p -> regla-8 p]
+        [p -> regla-9 p])) (SeguridadPaso / 10))
   ]
   resolver-conflictos
   colorear
@@ -153,6 +185,7 @@ to crear-estacion [origen]
   let y [pycor] of origen
   let ancho 10
   let largo 100
+  ; Crear pisos dentro de la estacion
   ask patches with [
     pxcor > x - largo / 2 and
     pxcor < x + largo / 2 and
@@ -161,6 +194,7 @@ to crear-estacion [origen]
     set tipo "piso"
     set pcolor gray
   ]
+  ; Paredes
   ask patches with [
     ((pxcor = x - largo / 2 or pxcor = x + largo / 2 ) and pycor > y - ancho / 2 and pycor < y + ancho / 2) or
     ((pycor = y - ancho / 2 or pycor = y + ancho / 2 ) and pxcor > x - largo / 2 and pxcor < x + largo / 2)
@@ -169,6 +203,7 @@ to crear-estacion [origen]
     set pcolor gray - 1
   ]
   let parada-actual 0
+  ; Paradas
   ask patches with [ (abs pycor) = 9 and (pxcor = x - 8 * orientacion-parada or pxcor = x + 42 * orientacion-parada) ] [
     sprout-paradas 1 [
       set size 5
@@ -178,6 +213,7 @@ to crear-estacion [origen]
       set puertas-parada []
       set orientacion-p orientacion-parada
     ]
+    ; Cordenadas x de puertas respecto a paradas
     foreach [4 15 25 37] [d ->
       ask patches with [(pxcor = [xcor] of parada-actual - d * [orientacion-parada] of parada-actual ) and (pycor = [orientacion-parada] of parada-actual * ancho / 2)] [
         sprout-puertas 1 [
@@ -194,10 +230,12 @@ to crear-estacion [origen]
   ]
 end
 to-report orientacion-parada
+  ; Reporta si esta en sentido derecha (1) o izquierda (-1)
   report ifelse-value (pycor < 0) [-1][1]
 end
 
 to-report cuenta-pasajeros-estacion [estacion-actual]
+  ; Cuenta los pasajeros en estacion-actual
   let x [xcor] of estacion-actual
   let y [ycor] of estacion-actual
   let ancho 10
@@ -239,6 +277,7 @@ end
 ; ----------------------------------
 
 to-report puerta-aleatoria []
+  ; Asigna una puerta aleatoria en la estacion mas cercana y del sentido opuesto
   let estacion-cercana (min-one-of estaciones [distance myself])
   let orientacion-actual orientacion-parada
   report (one-of (turtle-set ([puertas-parada] of one-of [paradas-estacion with [orientacion-parada != orientacion-actual]] of estacion-cercana)))
@@ -458,8 +497,8 @@ end
 ; BUSES
 ;----------------------------------
 
-; importante
 to crear-bus [origen numero-vagones velocidad-bus orientacion paradas-res]
+ ; Crea un bus en el patch origen
  let bus-principal 0
  ask origen [
     sprout-buses 1 [
@@ -479,6 +518,7 @@ end
 
 ; importante
 to crear-vagones [padre numero-vagones bus-principal]
+  ; Crea vagones de forma recursiva
   let orientacion 90
   let nuevo-vagon 0
   ask [conexion-vagon] of padre [
@@ -513,8 +553,8 @@ to crear-vagones [padre numero-vagones bus-principal]
   ]
 end
 
-; importante
 to mover [distancia]
+  ; Mueve un bus y sus vagones
   ifelse (is-agent? distancia)
   [move-to distancia][fd distancia]
   let conexion-actual conexion-vagon
@@ -529,6 +569,7 @@ to mover [distancia]
   ]
 end
 to cambiar-estado [estado-patches-bus]
+  ; Parquea o hace partir el bus cambiando los correspondientes patches
   let p (patch-set (n-values 7 [v -> patch-at-heading-and-distance (heading - 90) (v - 3)]))
   let bus-actual bus-correspondiente
   ask p [
@@ -809,41 +850,9 @@ Segundos
 HORIZONTAL
 
 @#$#@#$#@
-## WHAT IS IT?
+## ¿QUÉ ÉS?
 
-(a general understanding of what the model is trying to show or explain)
-
-## HOW IT WORKS
-
-(what rules the agents use to create the overall behavior of the model)
-
-## HOW TO USE IT
-
-(how to use the model, including a description of each of the items in the Interface tab)
-
-## THINGS TO NOTICE
-
-(suggested things for the user to notice while running the model)
-
-## THINGS TO TRY
-
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
-
-## EXTENDING THE MODEL
-
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
-
-## RELATED MODELS
-
-(models in the NetLogo Models Library and elsewhere which are of related interest)
-
-## CREDITS AND REFERENCES
-
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+Prototipo de simulacion de un sistema BRT como Transmilenio a base de agentes y automatas celulares
 @#$#@#$#@
 default
 true
